@@ -4,14 +4,14 @@ import NavBar from './components/NavBar';
 import Clock from "./components/Clock";
 import Stopwatch from "./components/Stopwatch";
 import Timer from "./components/Timer";
-import Calendar from "./components/Calendar";
 import Alarm from './components/Alarm';
 
 const App = () => {
-  const [selectedItem,setItem] = useState("Clock");
+  const [selectedItem,setItem] = useState(JSON.parse(localStorage.getItem("component")));
 
   const selectItemHandler = (item) => {
     // console.log("here");
+    localStorage.setItem("component",JSON.stringify(item));
     setItem(item);
   }
   return (
@@ -23,7 +23,6 @@ const App = () => {
             {selectedItem === "Timer" && <Timer/>}
             {selectedItem === "Alarm" && <Alarm/>}
             {selectedItem === "Stopwatch" && <Stopwatch/>}
-            {selectedItem === "Calendar" && <Calendar/>}
         </div>
     </div>
     </div>
