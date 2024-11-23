@@ -1,3 +1,4 @@
+/* global chrome */
 import { useRef, useState, useEffect } from "react";
 import { IoArrowBackOutline } from "react-icons/io5";
 import { LuAlarmPlus } from "react-icons/lu";
@@ -7,9 +8,9 @@ import AlarmCard from "./AlarmCard";
 const Alarm = () => {
   const audioRef = useRef(null);
   const [showHours,setShowHours] = useState(0);
-  const hours=useRef("hrs");
-  const mins=useRef("mins");
-  const ampm=useRef(null);
+  const hours=useRef("12");
+  const mins=useRef("00");
+  const ampm=useRef("AM");
   const [showMins,setShowMins] = useState(0);
   const [showAlarm,setShowAlarm] = useState(0);
   const [showslider,setShowSlider]=useState(0);
@@ -22,6 +23,20 @@ const Alarm = () => {
   const [tonePopup,showTonePopup] = useState({});
   const [prevIdx, setPrevIdx] = useState(0);
   const musictimeoutID=useRef(null);
+  let c=0;
+
+  useEffect(() => {
+    chrome.storage.local.get(['alarms'],function(res){
+      console.log(res.alarms);
+      if(res.alarms){
+        setAlarmsList(res.alarms);
+        setAlarm(1);
+      }
+      else{
+        setAlarm(0);
+      }
+    });
+  },[]);
 
   const populateli = (start,end) => {
     const listitem = [];
@@ -47,16 +62,7 @@ const Alarm = () => {
               break;
     }
   }
-  const handlePopup = (id) => {
-    const copy={...tonePopup};
-    if(prevIdx !== id){
-      copy[prevIdx]=0;
-    }
-    copy[id]=copy[id]^1;
-    setPrevIdx(id);
-    showTonePopup(copy);
-  }
-
+  
   const setHours = (h) => {
     handleShow(0);
     hours.current=h;
@@ -81,8 +87,11 @@ const Alarm = () => {
       audioRef.current.play();
     }
   }
-  const handleTone = async (url) => {
+  const handleTone = async (idx,url) => {
     setTone(url);
+    const temp = alarmsList;
+    temp[idx].music=url;
+    setAlarmsList(temp);
     setShowTone(0);
     if(musictimeoutID.current){
       clearTimeout(musictimeoutID);
@@ -106,16 +115,29 @@ const Alarm = () => {
       return () => {clearTimeout(musictimeoutID)}
     }
 
+  const generateCounter = () => {
+    if(alarmsList.length === 0){
+      c=0;
+    }
+    else{
+      c+=1;
+    }
+    return c;
+  }
   const handleAlarm = () => {
-    const newobj = {h:hours.current , m:mins.current, ap:ampm.current };
-    const keyCount = Object.keys(tonePopup).length+1;
-    const newitem = {keyCount : 0};
-    const copy={...tonePopup, newitem};
+    const p = generateCounter(); 
+    const newobj = {id: p, time : `${hours.current}:${mins.current} ${ampm.current}`, day : new Date().getDay(), status: 1, music: tone, vol: volume};
+    const updatedAlarmsList=[...alarmsList , newobj];
     setAlarm(1);
     alarmShowHandler();
     setShowPopup(1);
-    setAlarmsList([...alarmsList , newobj]);
-    showTonePopup(copy);
+    setAlarmsList(updatedAlarmsList);
+    chrome.storage.local.set({alarms: updatedAlarmsList}, function(){
+      chrome.runtime.sendMessage({
+        type: "setAlarmTime",
+        alarms: newobj, 
+      });
+    });
     setTimeout(() => {
       setShowPopup(0);
     },4000);
@@ -145,6 +167,36 @@ const Alarm = () => {
   const hoursList = populateli(1,12);
   const minutesList = populateli(0,59);
 
+  const removeAlarm = (idx) => {
+    chrome.storage.local.get(['alarms'],function(res){
+      if(res.alarms){
+        const temp=[...res.alarms];
+        chrome.runtime.sendMessage({
+          type: "removeAlarm",
+          alarms: temp[idx], 
+        });
+        temp.splice(idx,1);
+        setAlarmsList(temp);
+        if(temp.length>0){
+          chrome.storage.local.set({alarms: temp}, function(){
+            console.log("Alarms have been updated");
+          });
+        }
+        else {
+          chrome.storage.local.remove('alarms', function() {
+            console.log('The "alarms" key has been removed from storage.');
+          });
+          setAlarm(0);
+        }
+      }
+    });
+  }
+  const toggleStatus = (idx) => {
+    const temp=alarmsList;
+    temp[idx].status=(temp[idx].status^1);
+    setAlarmsList(temp);
+  }
+
   return (
     showAlarm === 0 ? 
       alarm === 0 ?
@@ -156,7 +208,7 @@ const Alarm = () => {
     :
       (<div className="flex flex-col h-screen w-11/12 p-10 gap-5">
         {alarmsList.map((item,index) => (
-          <AlarmCard key={index} id={index+1} alarm={item} handlePopup={handlePopup} tonePopup={tonePopup} tone={setTone} vol={setVolume} seek={audioRef} handleVolume={handleVolume} handleTone={handleTone}/>
+          <AlarmCard key={index} id={index+1} alarm={item.time} handleTone={handleTone} removeAlarm={() => removeAlarm(index)} toggleStatus={() => toggleStatus(index)}/>
         ))}
         <button className="size-20 pb-2 self-center bg-gray-800 rounded-full hover:bg-gray-500" onClick={addAlarm}><p className="text-6xl text-center text-sky-400">+</p></button>
       </div>)
@@ -187,7 +239,6 @@ const Alarm = () => {
           }
       </div>
       <select className="h-28 w-36 bg-gray-800 bg-opacity-40 border-4 border-indigo-600 text-6xl text-center text-white focus:outline-white" name="ampm" onChange={setAmpm} onClick={() => handleShow(3)}>
-        <option className=" bg-gray-800 text-4xl" value=""></option>
         <option className=" bg-gray-800 text-4xl" value="AM">AM</option>
         <option className=" bg-gray-800 text-4xl" value="PM">PM</option>
       </select>
@@ -208,7 +259,7 @@ const Alarm = () => {
         <div className="absolute right-2 bottom-10 h-24 w-28 overflow-y-scroll text-base text-center bg-gray-800 rounded-lg">
           <ul className="flex flex-col">
             {music.map((sound,index) => (
-              <button key={index} onClick={() => handleTone(sound.url)}><li key={index} className="py-1">Sound {index+1}</li></button>
+              <button key={index} onClick={() => handleTone(index,sound.url)}><li key={index} className="py-1">Sound {index+1}</li></button>
             ))}
           </ul>
         </div> :

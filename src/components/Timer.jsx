@@ -81,7 +81,11 @@ const Timer = () => {
         if (!localStorage.getItem("endTime")) {
           localStorage.setItem("endTime", JSON.stringify(new Date().getTime() + (((hours * 3600) + (minutes * 60) + seconds) * 1000)));
           const endTime = new Date().getTime() + ((hours * 3600 + minutes * 60 + seconds) * 1000);
-          chrome.runtime.sendMessage({ type : "setEndTime", endTime });
+          // Sending a message with endTime
+          chrome.runtime.sendMessage({
+            type: "setEndTime",
+            endTime: endTime, 
+          });
         }
         localStorage.setItem("playTime", JSON.stringify(1));
         chrome.storage.local.set({playTime : 1});
